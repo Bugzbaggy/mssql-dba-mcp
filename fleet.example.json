@@ -1,0 +1,63 @@
+[
+  {
+    "_comment": "AG listener for region1. Use listeners for normal queries.",
+    "name": "region1-listener",
+    "region": "region1",
+    "host": "listener.region1.example.com",
+    "port": 1433,
+    "user": "${SQL_USER}",
+    "password": "${SQL_PASSWORD}",
+    "database": "AppCatalog",
+    "applicationIntent": "ReadOnly"
+  },
+  {
+    "_comment": "Individual replicas. Needed for node-local data: error logs, dumps, cluster reports.",
+    "name": "region1-node1",
+    "region": "region1",
+    "host": "192.0.2.20",
+    "port": 1433,
+    "user": "${SQL_USER}",
+    "password": "${SQL_PASSWORD}",
+    "database": "AppCatalog",
+    "applicationIntent": "ReadOnly"
+  },
+  {
+    "name": "region1-node2",
+    "region": "region1",
+    "host": "192.0.2.21",
+    "port": 1433,
+    "user": "${SQL_USER}",
+    "password": "${SQL_PASSWORD}",
+    "database": "AppCatalog",
+    "applicationIntent": "ReadOnly"
+  },
+  {
+    "_comment": "A file-share witness is not a SQL Server. kind=witness marks it so SQL tools skip it.",
+    "name": "region1-witness",
+    "region": "region1",
+    "kind": "witness",
+    "host": "192.0.2.23",
+    "computer_name": "REGION1-WITNESS"
+  },
+  {
+    "_comment": "A second region. Add as many as you run; connections are lazy.",
+    "name": "region2-listener",
+    "region": "region2",
+    "host": "192.0.2.24",
+    "port": 1433,
+    "user": "${SQL_USER}",
+    "password": "${SQL_PASSWORD}",
+    "database": "AppCatalog",
+    "applicationIntent": "ReadOnly"
+  },
+  {
+    "name": "region2-node1",
+    "region": "region2",
+    "host": "192.0.2.25",
+    "port": 1433,
+    "user": "${SQL_USER}",
+    "password": "${SQL_PASSWORD}",
+    "database": "AppCatalog",
+    "applicationIntent": "ReadOnly"
+  }
+]
