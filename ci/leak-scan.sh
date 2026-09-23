@@ -25,6 +25,14 @@ PAT='\b(sg|uk|us|id|st)-(db[0-9]|primary|listener|nlb)\b|sg/id/uk/us|\bID-UK-US\
 # it firing on an ISO country code in test data, but under -i it also matched the
 # English "fix this for us". Region codes are always written upper-case.
 
+# Staging resource groups use a 'stg' prefix, one letter longer than the 'st'
+# the pattern above matches, with suffixes the db/primary/listener/nlb list does
+# not cover. Two publishable repos were carrying such a name before this class
+# existed. Matched by shape, like the rest of this class, so no real name has to
+# appear here — this file excludes itself from the scan, so anything written in
+# it ships unchecked.
+PAT="$PAT"'|\bstg-(ag|dbcluster|lsnr)[0-9]+\b'
+
 # --- Class 2: company / product / vendor --------------------------------------
 PAT="$PAT"'|wavecell|8x8|cpaas|CPAAS|MessageSphere|WC_[A-Za-z_]+|govern8'
 PAT="$PAT"'|\bPASA\b|\bPasa\b|pasa-'
@@ -82,6 +90,27 @@ PAT="$PAT"'|\b(vpc|subnet|sg|eni|ami|rtb|igw|acl)-[0-9a-f]{8,17}\b'
 # a real address that shared it.
 PAT_IP='\b(10|192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b'
 ALLOW_IP='10\.0\.0\.0|192\.168\.0\.0|172\.16\.0\.0'
+# GUIDs. A real one lifted from a cluster log, an Entra app or a subscription is
+# an internal identifier, and nothing else in this gate can see it — a GUID has
+# no distinguishing shape. Scanned in its own pass and allowed by VALUE, because
+# the legitimate ones are few and nameable:
+#   * a hex run that is one repeated character, or all zeros, or spells dead-beef
+#     — the placeholder conventions used in examples and test fixtures;
+#   * this module's own manifest GUID, which is its public identity;
+#   * Microsoft's well-known High Performance power-scheme GUID, which is the
+#     same constant on every Windows machine.
+# Anything else is assumed real until someone adds it here deliberately.
+PAT_GUID='\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'
+# Repeated-character runs are enumerated rather than written as a backreference
+# ((.)\1{7}): grep -E is POSIX ERE, which has no backreferences, and GNU grep
+# does not silently ignore one — it fails the whole pass with "Invalid back
+# reference". The filter then produces nothing and every GUID is allowed, so the
+# gate reports clean while checking nothing. Fail-open, in a leak gate.
+ALLOW_GUID='00000000|11111111|22222222|33333333|44444444|55555555|66666666|77777777'
+ALLOW_GUID="$ALLOW_GUID"'|88888888|99999999|aaaaaaaa|bbbbbbbb|cccccccc|dddddddd'
+ALLOW_GUID="$ALLOW_GUID"'|eeeeeeee|ffffffff|dead-beef'
+ALLOW_GUID="$ALLOW_GUID"'|c75286ed-c27d-4173-acff-6fb8cb8bca0d'
+ALLOW_GUID="$ALLOW_GUID"'|8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 
 # --- Class 8: pre-anonymization schema prefixes / product names --------------
 # The 2026-09 pass renamed cp./ms./sms. -> core./svc./msg. and ChatApps/Omnishield
@@ -150,6 +179,10 @@ hits_12=$(grep -rnoE "$PAT_12" . "${EXCLUDES[@]}" 2>/dev/null \
             | grep -vE ":($ALLOW_12)\$")
 hits_ip=$(grep -rnoE "$PAT_IP" . "${EXCLUDES[@]}" 2>/dev/null \
             | grep -vE ":($ALLOW_IP)\$")
+# The allow-list is matched case-insensitively and as a SUBSTRING of the guid,
+# so the repeated-character and dead-beef conventions match wherever they sit.
+hits_guid=$(grep -rnoE "$PAT_GUID" . "${EXCLUDES[@]}" 2>/dev/null \
+            | grep -viE ":[^:]*($ALLOW_GUID)")
 
 if [ -n "$tracked_sp" ]; then
   echo "$tracked_sp" | sed 's/^/tracked agent scratch: /'
@@ -157,11 +190,12 @@ if [ -n "$tracked_sp" ]; then
   exit 1
 fi
 
-if [ -n "$hits" ] || [ -n "$hits_cs" ] || [ -n "$hits_12" ] || [ -n "$hits_ip" ]; then
+if [ -n "$hits" ] || [ -n "$hits_cs" ] || [ -n "$hits_12" ] || [ -n "$hits_ip" ] || [ -n "$hits_guid" ]; then
   [ -n "$hits" ] && echo "$hits"
   [ -n "$hits_cs" ] && echo "$hits_cs"
   [ -n "$hits_12" ] && echo "$hits_12" | sed 's/$/  <- 12-digit run; if this is an AWS account id use a repeated-digit placeholder/'
   [ -n "$hits_ip" ] && echo "$hits_ip" | sed 's/$/  <- RFC1918 address; examples must use the RFC5737 doc range 192.0.2.x/'
+  [ -n "$hits_guid" ] && echo "$hits_guid" | sed 's/$/  <- real-looking GUID; use a repeated-character or dead-beef placeholder/'
   echo "::error::internal identifier found - see matches above"
   exit 1
 fi
